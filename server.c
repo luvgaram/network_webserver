@@ -151,7 +151,8 @@ int sendpage(int sockfd, char *filename, char *http_ver, char *codemsg) {
 			write(sockfd, buf, readn);
 		}
 		close(fd);
-	} else write(sockfd, codemsg, strlen(codemsg)); // 파일이 없으면 codemsg 전송
+	} else
+		write(sockfd, codemsg, strlen(codemsg)); // 파일이 없으면 codemsg 전송
 	return 0;
 }
 
@@ -162,10 +163,21 @@ int protocol_parser(char* str, struct user_request* request) {
 	tr = strtok(str, token);
 	
 	for (i = 0; i < 3; i++) {
-		if (tr == NULL) break;
-		if (i == 0) strcpy(request->method, tr);
-		else if (i == 1) strcpy(request->page, tr);
-		else if (i == 2) strcpy(request->http_ver, tr);
+		if (tr == NULL)
+			break;
+		switch (i) {
+			case 0:
+				strcpy(request->method, tr);
+				break;
+			case 1:
+				strcpy(request->page, tr);
+				break;
+			case 2:
+				strcpy(request->http_ver, tr);
+				break;
+			default:
+				break;
+		}
 		tr = strtok(NULL, token);
 	}
 
@@ -174,4 +186,4 @@ int protocol_parser(char* str, struct user_request* request) {
 	printf("http_ver : %s\n", request->http_ver);
 
 	return 0;
-}
+} 
