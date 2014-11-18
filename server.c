@@ -1,18 +1,20 @@
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
 #include <stdio.h>
-#include <signal.h>
-#include <time.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <signal.h>
+#include <time.h>
 #include <fcntl.h>
 
 #define PORTNUM 8000 // 8000번 포트 사용
 #define MAXLINE 1024 
 #define HEADERSIZE 1024 // 응답할 헤더 정보 크기
 #define SERVER "EunjooServer/1.0 (Linux)" // 서버 이름(웹로봇용)
+#define ERROR -1
+#define LISTENQUEUE 5
 
 struct user_request // 사용자 요청 저장용
 {
@@ -21,7 +23,7 @@ struct user_request // 사용자 요청 저장용
 	char http_ver[80]; // HTTP 버전
 };
 
-char root[] = "page"; // 웹서버 있는 디렉터리가 루트
+char root[] = "page"; // 루트 디렉터리 지정
 
 int webserv(int sockfd); // 클라 요청받고 결과 전송
 int protocol_parser(char *str, struct user_request *request); // 클라 요청 분석 -> user_request 저장
@@ -34,8 +36,9 @@ int main()
 	int optval = 1;
 	struct sockaddr_in addr, cliaddr;
 	
-	if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-		return -1;
+	if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) == ERROR) {
+		perror("socket");	
+		return ERROR;
 	}
 
 	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)); // 소켓 재사용
@@ -43,11 +46,15 @@ int main()
 	addr.sin_addr.s_addr = htonl(INADDR_ANY); // INADDR_ANY: 서버 IP 주소를 자동으로 찾아서 대입
 	addr.sin_port = htons(PORTNUM);
 
-	if (bind(listenfd, (struct sockaddr*)&addr, sizeof(addr)) == -1)
-		return -1;
+	if (bind(listenfd, (struct sockaddr*)&addr, sizeof(addr)) == ERROR) {
+		perror("bind");
+		return ERROR;
+	}
 	
-	if (listen(listenfd, 5) == -1)
-		return -1;
+	if (listen(listenfd, LISTENQUEUE) == ERROR) {
+		perror("listen");
+		return ERROR;
+	}
 	
 	signal(SIGCHLD, SIG_IGN); // 자식 프로세스 종료 시점 발생 시그널 무시
 	
@@ -55,8 +62,9 @@ int main()
 		clilen = sizeof(clilen);
 		clientfd = accept(listenfd, (struct sockaddr*)&cliaddr, &clilen);
 		
-		if (clientfd == -1) {
-			return -1;
+		if (clientfd == ERROR) {
+			perror("accept");
+			return ERROR;
 		}
 		pid = fork(); // 자식 생성
 		
@@ -66,8 +74,9 @@ int main()
 			exit(0);
 		}
 
-		if (pid == -1) {
-			return -1;
+		if (pid == ERROR) {
+			perror("fork");
+			return ERROR;
 		}
 		
 		close(clientfd);
@@ -79,14 +88,15 @@ int webserv(int sockfd) {
 	char page[MAXLINE];
 	struct user_request request;
 
-	if (read(sockfd, buf, MAXLINE) <= 0) // 클라이언트 요청 읽어서 buf 저장
-		return -1;
+	if (read(sockfd, buf, MAXLINE) <= 0) {// 클라이언트 요청 읽어서 buf 저장
+		perror("read");
+		return ERROR;
+	}
 
 	printf("%s", buf);
 	protocol_parser(buf, &request); // 클라이언트 요청 분석해서request 저장
 
 	if (!strcmp(request.method, "GET")) { // GET 요청이면
-//		sprintf(page, "%s", request.page);
 		sprintf(page, "%s%s", root, request.page);
 		if (access(page, R_OK)) { // 파일을 읽을 수 없으면
 			sendpage(sockfd, NULL, request.http_ver, "404 Not Found");
